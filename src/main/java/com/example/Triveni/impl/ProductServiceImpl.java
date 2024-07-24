@@ -11,14 +11,21 @@ import com.example.Triveni.service.ProductService;
 import com.opencsv.CSVWriter;
 import com.opencsv.ICSVWriter;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 
+import javax.mail.MessagingException;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -26,6 +33,9 @@ public class ProductServiceImpl implements ProductService {
 
     @Autowired
     private ProductInvoiceRepository productInvoiceRepository;
+
+    @Autowired
+    private EmailService emailService;
 
     @Override
     public List<ProductInvoiceResponse> getAllProducts() {
@@ -40,6 +50,16 @@ public class ProductServiceImpl implements ProductService {
                 .productQuantity(productInvoice.getProductQuantity())
                 .expirationDate(productInvoice.getExpirationDate())
                 .build()).collect(Collectors.toList());
+    }
+
+    @Override
+    public Page<ProductInvoice> getFilteredProducts(String invoiceId, Integer pageNumber, Integer pageSize) {
+        Pageable pageable = PageRequest.of(pageNumber,pageSize, Sort.by("expirationDate").ascending());
+        if(StringUtils.isEmpty(invoiceId)) {
+            return productInvoiceRepository.findAll(pageable);
+        } else{
+            return productInvoiceRepository.findByInvoiceId(invoiceId, pageable);
+        }
     }
 
     @Override
@@ -71,36 +91,51 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public void addProductInvoices(AddProductInvoiceRequest addProductInvoiceRequest) {
-        if (!CollectionUtils.isEmpty(addProductInvoiceRequest.getProductInvoiceRequestList())) {
-            List<ProductInvoiceRequest> productInvoiceRequestList =
-                    addProductInvoiceRequest.getProductInvoiceRequestList();
-            String status = addProductInvoiceRequest.getStatus();
+    public void addProductInvoices(ProductInvoiceRequest productInvoiceRequest) {
+        if (Objects.nonNull(productInvoiceRequest)) {
+            ProductInvoice productInvoice = convertProductInvoice(productInvoiceRequest);
+            String status = productInvoiceRequest.getStatus();
+            productInvoiceRepository.save(productInvoice);
             if ("CLOSE".equalsIgnoreCase(status)) {
                 List<ProductInvoice> existingProductInvoiceList =
-                        productInvoiceRepository.findByInvoiceId(productInvoiceRequestList.get(0).getInvoiceId());
-                existingProductInvoiceList.parallelStream().forEach(productInvoice -> productInvoice.setInvoiceStatus(status));
+                        productInvoiceRepository.findByInvoiceId(productInvoiceRequest.getInvoiceId());
+                existingProductInvoiceList.parallelStream().forEach(productInvoiceObject -> productInvoiceObject.setInvoiceStatus(status));
                 productInvoiceRepository.saveAll(existingProductInvoiceList);
-            } else {
-                List<ProductInvoice> productInvoiceList = productInvoiceRequestList.parallelStream()
-                        .map(productInvoiceRequest -> convertProductInvoice(productInvoiceRequest, status))
-                        .collect(Collectors.toList());
-                productInvoiceRepository.saveAll(productInvoiceList);
             }
         }
     }
 
+//    @Override
+//    public void addProductInvoices(AddProductInvoiceRequest addProductInvoiceRequest) {
+//        if (!CollectionUtils.isEmpty(addProductInvoiceRequest.getProductInvoiceRequestList())) {
+//            List<ProductInvoiceRequest> productInvoiceRequestList =
+//                    addProductInvoiceRequest.getProductInvoiceRequestList();
+//            String status = addProductInvoiceRequest.getStatus();
+//            if ("CLOSE".equalsIgnoreCase(status)) {
+//                List<ProductInvoice> existingProductInvoiceList =
+//                        productInvoiceRepository.findByInvoiceId(productInvoiceRequestList.get(0).getInvoiceId());
+//                existingProductInvoiceList.parallelStream().forEach(productInvoice -> productInvoice.setInvoiceStatus(status));
+//                productInvoiceRepository.saveAll(existingProductInvoiceList);
+//            } else {
+//                List<ProductInvoice> productInvoiceList = productInvoiceRequestList.parallelStream()
+//                        .map(productInvoiceRequest -> convertProductInvoice(productInvoiceRequest, status))
+//                        .collect(Collectors.toList());
+//                productInvoiceRepository.saveAll(productInvoiceList);
+//            }
+//        }
+//    }
+
     @Override
     public DashBoardResponse getExpiryDashBoard() {
         Date startDate = new Date(System.currentTimeMillis());
-        Date after1Week = new Date(startDate.getTime() + (1000l * 60 * 60 * 24 * 7));
-        Date after2Week = new Date(startDate.getTime() + (1000l * 60 * 60 * 24 * 14));
-        Date after3Week = new Date(startDate.getTime() + (1000l * 60 * 60 * 24 * 21));
-        Date after4Week = new Date(startDate.getTime() + (1000l * 60 * 60 * 24 * 28));
-        Date after10Days = new Date(startDate.getTime() + (1000l * 60 * 60 * 24 * 10));
-        Date after20Days = new Date(startDate.getTime() + (1000l * 60 * 60 * 24 * 20));
-        Date after30Days = new Date(startDate.getTime() + (1000l * 60 * 60 * 24 * 30));
-        Date after40Days = new Date(startDate.getTime() + (1000l * 60 * 60 * 24 * 40));
+        Date after1Week = new Date(startDate.getTime() + (1000L * 60 * 60 * 24 * 7));
+        Date after2Week = new Date(startDate.getTime() + (1000L * 60 * 60 * 24 * 14));
+        Date after3Week = new Date(startDate.getTime() + (1000L * 60 * 60 * 24 * 21));
+        Date after4Week = new Date(startDate.getTime() + (1000L * 60 * 60 * 24 * 28));
+        Date after10Days = new Date(startDate.getTime() + (1000L * 60 * 60 * 24 * 10));
+        Date after20Days = new Date(startDate.getTime() + (1000L * 60 * 60 * 24 * 20));
+        Date after30Days = new Date(startDate.getTime() + (1000L * 60 * 60 * 24 * 30));
+        Date after40Days = new Date(startDate.getTime() + (1000L * 60 * 60 * 24 * 40));
         List<ProductInvoiceResponse> listOfProductToExpireInWeek1 =
                 getListOfProductsExpiringBetweenDates(startDate, after1Week);
         List<ProductInvoiceResponse> listOfProductToExpireInWeek2 =
@@ -129,7 +164,7 @@ public class ProductServiceImpl implements ProductService {
                 .build();
     }
 
-    private ProductInvoice convertProductInvoice(ProductInvoiceRequest productInvoiceRequest, String status) {
+    private ProductInvoice convertProductInvoice(ProductInvoiceRequest productInvoiceRequest) {
         ProductInvoice productInvoice = new ProductInvoice();
         productInvoice.setInvoiceId(productInvoiceRequest.getInvoiceId());
         productInvoice.setInvoiceDate(productInvoiceRequest.getInvoiceDate());
@@ -139,7 +174,7 @@ public class ProductServiceImpl implements ProductService {
         productInvoice.setProductSize(productInvoiceRequest.getProductSize());
         productInvoice.setProductQuantity(productInvoiceRequest.getProductQuantity());
         productInvoice.setExpirationDate(productInvoiceRequest.getExpirationDate());
-        productInvoice.setInvoiceStatus(status);
+        productInvoice.setInvoiceStatus(productInvoiceRequest.getStatus());
         return productInvoice;
     }
 
@@ -166,8 +201,9 @@ public class ProductServiceImpl implements ProductService {
 
     private void writeToFile(List<ProductInvoiceResponse> productInvoiceResponseList, String date) {
         ICSVWriter csvWriter = null;
+        String fileName = "product_list_" + date + ".csv";
         try {
-            csvWriter = new CSVWriter(new FileWriter("product_list_" + date + ".csv"));
+            csvWriter = new CSVWriter(new FileWriter(fileName));
             String[] header = {"invoiceId", "invoiceDate", "vendorName", "brandName", "productName", "productSize",
                     "productQuantity", "expirationDate"};
             csvWriter.writeNext(header, true);
@@ -190,8 +226,11 @@ public class ProductServiceImpl implements ProductService {
             if (csvWriter != null) {
                 try {
                     csvWriter.close();
+                    emailService.mailWithAttachment(fileName);
                 } catch (IOException e) {
                     System.err.println("Error closing the writer: " + e);
+                } catch (MessagingException e) {
+                    throw new RuntimeException(e);
                 }
             }
         }

@@ -19,7 +19,7 @@ public class ProductInvoice implements Serializable {
 
     @Id
     @GeneratedValue(strategy= GenerationType.IDENTITY)
-    @Column(name = "ID")
+    @Column(name = "id", updatable = false, nullable = false)
     private Integer id;
 
     @Column(name = "invoice_id")

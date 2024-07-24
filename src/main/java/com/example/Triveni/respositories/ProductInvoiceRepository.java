@@ -1,6 +1,8 @@
 package com.example.Triveni.respositories;
 
 import com.example.Triveni.collections.ProductInvoice;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -16,6 +18,8 @@ public interface ProductInvoiceRepository extends JpaRepository<ProductInvoice, 
     List<ProductInvoice> findByExpirationDateBetween(
             Date startDate, Date endDate);
     List<ProductInvoice> findByInvoiceId(String invoiceId);
+
+    Page<ProductInvoice> findByInvoiceId(String invoiceId, Pageable pageable);
 
     @Query("SELECT DISTINCT p.invoiceId FROM ProductInvoice p WHERE p.invoiceStatus = :status")
     List<String> findDistinctInvoiceIdsByStatus(@Param("status") String status);

@@ -1,6 +1,7 @@
 package com.example.Triveni.controller;
 
 import com.example.Triveni.request.AddProductInvoiceRequest;
+import com.example.Triveni.request.ProductInvoiceRequest;
 import com.example.Triveni.response.ErrorResponse;
 import com.example.Triveni.service.ProductService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +28,19 @@ public class ProductController {
         }
     }
 
+    @GetMapping(path = "/filter")
+    private ResponseEntity<?> getFilteredProducts(
+            @RequestParam(required = false) String invoiceId,
+            @RequestParam(defaultValue = "0") int pageNo,
+            @RequestParam(defaultValue = "10") int pageSize){
+        try {
+            return new ResponseEntity<>(productService.getFilteredProducts(invoiceId, pageNo, pageSize), HttpStatus.OK);
+        } catch (Exception e) {
+            return new ResponseEntity<>(new ErrorResponse("Application has faced an issue"),
+                    HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
     @GetMapping(path = "/expiry")
     private ResponseEntity<?> getExpiryProducts(){
         try {
@@ -37,7 +51,7 @@ public class ProductController {
         }
     }
 
-    @GetMapping(path = "/product/{invoiceId}")
+    @GetMapping(path = "/{invoiceId}")
     private ResponseEntity<?> getProductDetailsByInvoiceId(@PathVariable(value = "invoiceId") String invoiceId){
         try {
             return new ResponseEntity<>(productService.getProductsByInvoiceId(invoiceId), HttpStatus.OK);
@@ -57,15 +71,16 @@ public class ProductController {
         }
     }
 
-    @PostMapping("/add/products")
-    private ResponseEntity<?> addProductInvoices(@RequestBody AddProductInvoiceRequest addProductInvoiceRequest){
+    @PostMapping("/add")
+    private ResponseEntity<?> addProductInvoices(@RequestBody ProductInvoiceRequest productInvoiceRequest){
         try {
-            productService.addProductInvoices(addProductInvoiceRequest);
+            productService.addProductInvoices(productInvoiceRequest);
         } catch (Exception e) {
             return new ResponseEntity<>(new ErrorResponse("Application has faced an issue"),
                     HttpStatus.INTERNAL_SERVER_ERROR);
         }
-        return new ResponseEntity<>(productService.getAllProducts(), HttpStatus.OK);
+        return new ResponseEntity<>(productService.
+                getProductsByInvoiceId(productInvoiceRequest.getInvoiceId()), HttpStatus.OK);
     }
 
     @GetMapping(path = "/dashboard")
