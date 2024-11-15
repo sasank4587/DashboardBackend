@@ -1,5 +1,6 @@
 package com.example.Triveni.respositories;
 
+import com.example.Triveni.collections.Invoice;
 import com.example.Triveni.collections.ProductInvoice;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -12,15 +13,13 @@ import java.util.Date;
 import java.util.List;
 
 @Repository
-public interface ProductInvoiceRepository extends JpaRepository<ProductInvoice, Integer> {
+public interface ProductInvoiceRepository extends JpaRepository<ProductInvoice, String> {
 
 //    @Query("select P from ProductInvoice p where p.expirationDate >= :startDate and p.expirationDate <= :enddate")
     List<ProductInvoice> findByExpirationDateBetween(
             Date startDate, Date endDate);
-    List<ProductInvoice> findByInvoiceId(String invoiceId);
 
-    Page<ProductInvoice> findByInvoiceId(String invoiceId, Pageable pageable);
+    List<ProductInvoice> findByInvoice(Invoice invoice);
 
-    @Query("SELECT DISTINCT p.invoiceId FROM ProductInvoice p WHERE p.invoiceStatus = :status")
-    List<String> findDistinctInvoiceIdsByStatus(@Param("status") String status);
+    Page<ProductInvoice> findByInvoice(Invoice invoice, Pageable pageable);
 }

@@ -1,11 +1,13 @@
 package com.example.Triveni.impl;
 
+import com.example.Triveni.collections.Invoice;
 import com.example.Triveni.collections.ProductInvoice;
-import com.example.Triveni.request.AddProductInvoiceRequest;
+import com.example.Triveni.exception.InvoiceDoesNotExist;
 import com.example.Triveni.request.ProductInvoiceRequest;
 import com.example.Triveni.response.DashBoardResponse;
 import com.example.Triveni.response.InvoiceResponse;
 import com.example.Triveni.response.ProductInvoiceResponse;
+import com.example.Triveni.respositories.InvoiceRepository;
 import com.example.Triveni.respositories.ProductInvoiceRepository;
 import com.example.Triveni.service.ProductService;
 import com.opencsv.CSVWriter;
@@ -16,16 +18,17 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
-import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import javax.mail.MessagingException;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -35,13 +38,16 @@ public class ProductServiceImpl implements ProductService {
     private ProductInvoiceRepository productInvoiceRepository;
 
     @Autowired
+    private InvoiceRepository invoiceRepository;
+
+    @Autowired
     private EmailService emailService;
 
     @Override
     public List<ProductInvoiceResponse> getAllProducts() {
         List<ProductInvoice> productInvoiceList = productInvoiceRepository.findAll();
         return productInvoiceList.parallelStream().map(productInvoice -> ProductInvoiceResponse.builder()
-                .invoiceId(productInvoice.getInvoiceId())
+                .invoiceId(productInvoice.getInvoice().getInvoiceId())
                 .invoiceDate(productInvoice.getInvoiceDate())
                 .vendorName(productInvoice.getVendorName())
                 .productName(productInvoice.getProductName())
@@ -53,12 +59,22 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public Page<ProductInvoice> getFilteredProducts(String invoiceId, Integer pageNumber, Integer pageSize) {
+    public Page<ProductInvoiceResponse> getFilteredProducts(String invoiceId, Integer pageNumber, Integer pageSize)
+            throws InvoiceDoesNotExist {
         Pageable pageable = PageRequest.of(pageNumber,pageSize, Sort.by("expirationDate").ascending());
+        invoiceId = invoiceId.trim();
         if(StringUtils.isEmpty(invoiceId)) {
-            return productInvoiceRepository.findAll(pageable);
+            Page<ProductInvoice> productInvoices = productInvoiceRepository.findAll(pageable);
+            return productInvoices.map(this::convertToProductInvoiceResponse);
         } else{
-            return productInvoiceRepository.findByInvoiceId(invoiceId, pageable);
+            Optional<Invoice> optionalInvoice = invoiceRepository.findByInvoiceId(invoiceId);
+            if(optionalInvoice.isPresent()) {
+                Page<ProductInvoice> productInvoices = productInvoiceRepository.findByInvoice(optionalInvoice.get(),
+                        pageable);
+                return productInvoices.map(this::convertToProductInvoiceResponse);
+            } else{
+                throw new InvoiceDoesNotExist("This Invoice does not exist.");
+            }
         }
     }
 
@@ -75,55 +91,40 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public List<ProductInvoiceResponse> getProductsByInvoiceId(String invoiceId) {
-        List<ProductInvoice> productInvoiceList = productInvoiceRepository.findByInvoiceId(invoiceId);
-        return productInvoiceList.parallelStream()
-                .map(this::convertToProductInvoiceResponse)
-                .collect(Collectors.toList());
+    public List<ProductInvoiceResponse> getProductsByInvoiceId(String invoiceId) throws InvoiceDoesNotExist {
+        Optional<Invoice> optionalInvoice = invoiceRepository.findByInvoiceId(invoiceId);
+        if(optionalInvoice.isPresent()){
+            List<ProductInvoice> productInvoiceList = productInvoiceRepository.findByInvoice(optionalInvoice.get());
+            return productInvoiceList.parallelStream()
+                    .map(this::convertToProductInvoiceResponse)
+                    .collect(Collectors.toList());
+        }
+        throw new InvoiceDoesNotExist("This Invoice does not exist.");
     }
 
     @Override
     public List<InvoiceResponse> getOpenInvoiceIds() {
-        List<String> invoiceIds = productInvoiceRepository.findDistinctInvoiceIdsByStatus("OPEN");
-        return invoiceIds.parallelStream().map(s -> {
-            return InvoiceResponse.builder().invoiceId(s).build();
+        List<Invoice> openInvoices = invoiceRepository.findByInvoiceStatus("OPEN");
+        return openInvoices.parallelStream().map(s -> {
+            return InvoiceResponse.builder().invoiceId(s.getInvoiceId()).build();
         }).collect(Collectors.toList());
     }
 
     @Override
     public void addProductInvoices(ProductInvoiceRequest productInvoiceRequest) {
         if (Objects.nonNull(productInvoiceRequest)) {
-            ProductInvoice productInvoice = convertProductInvoice(productInvoiceRequest);
-            String status = productInvoiceRequest.getStatus();
-            productInvoiceRepository.save(productInvoice);
-            if ("CLOSE".equalsIgnoreCase(status)) {
-                List<ProductInvoice> existingProductInvoiceList =
-                        productInvoiceRepository.findByInvoiceId(productInvoiceRequest.getInvoiceId());
-                existingProductInvoiceList.parallelStream().forEach(productInvoiceObject -> productInvoiceObject.setInvoiceStatus(status));
-                productInvoiceRepository.saveAll(existingProductInvoiceList);
+            Optional<Invoice> optionalInvoice = invoiceRepository.findByInvoiceId(productInvoiceRequest.getInvoiceId());
+            if(optionalInvoice.isPresent()){
+                Invoice invoice = optionalInvoice.get();
+                if("OPEN".equalsIgnoreCase(invoice.getInvoiceStatus())){
+                    saveProductInvoice(productInvoiceRequest, invoice);
+                }
+            } else{
+                Invoice invoiceRequest = createInvoiceObject(productInvoiceRequest.getInvoiceId());
+                saveProductInvoice(productInvoiceRequest, invoiceRepository.saveAndFlush(invoiceRequest));
             }
         }
     }
-
-//    @Override
-//    public void addProductInvoices(AddProductInvoiceRequest addProductInvoiceRequest) {
-//        if (!CollectionUtils.isEmpty(addProductInvoiceRequest.getProductInvoiceRequestList())) {
-//            List<ProductInvoiceRequest> productInvoiceRequestList =
-//                    addProductInvoiceRequest.getProductInvoiceRequestList();
-//            String status = addProductInvoiceRequest.getStatus();
-//            if ("CLOSE".equalsIgnoreCase(status)) {
-//                List<ProductInvoice> existingProductInvoiceList =
-//                        productInvoiceRepository.findByInvoiceId(productInvoiceRequestList.get(0).getInvoiceId());
-//                existingProductInvoiceList.parallelStream().forEach(productInvoice -> productInvoice.setInvoiceStatus(status));
-//                productInvoiceRepository.saveAll(existingProductInvoiceList);
-//            } else {
-//                List<ProductInvoice> productInvoiceList = productInvoiceRequestList.parallelStream()
-//                        .map(productInvoiceRequest -> convertProductInvoice(productInvoiceRequest, status))
-//                        .collect(Collectors.toList());
-//                productInvoiceRepository.saveAll(productInvoiceList);
-//            }
-//        }
-//    }
 
     @Override
     public DashBoardResponse getExpiryDashBoard() {
@@ -164,9 +165,20 @@ public class ProductServiceImpl implements ProductService {
                 .build();
     }
 
-    private ProductInvoice convertProductInvoice(ProductInvoiceRequest productInvoiceRequest) {
+    @Override
+    public Invoice closeInvoice(String invoiceId) throws InvoiceDoesNotExist{
+        Optional<Invoice> optionalInvoice = invoiceRepository.findByInvoiceId(invoiceId);
+        if(optionalInvoice.isPresent()){
+            Invoice invoice = optionalInvoice.get();
+            invoice.setInvoiceStatus("CLOSED");
+            return invoiceRepository.saveAndFlush(invoice);
+        }
+        throw new InvoiceDoesNotExist("This Invoice does not exist.");
+    }
+
+    private ProductInvoice convertProductInvoice(ProductInvoiceRequest productInvoiceRequest, Invoice invoice) {
         ProductInvoice productInvoice = new ProductInvoice();
-        productInvoice.setInvoiceId(productInvoiceRequest.getInvoiceId());
+        productInvoice.setInvoice(invoice);
         productInvoice.setInvoiceDate(productInvoiceRequest.getInvoiceDate());
         productInvoice.setVendorName(productInvoiceRequest.getVendorName());
         productInvoice.setProductName(productInvoiceRequest.getProductName());
@@ -174,8 +186,16 @@ public class ProductServiceImpl implements ProductService {
         productInvoice.setProductSize(productInvoiceRequest.getProductSize());
         productInvoice.setProductQuantity(productInvoiceRequest.getProductQuantity());
         productInvoice.setExpirationDate(productInvoiceRequest.getExpirationDate());
-        productInvoice.setInvoiceStatus(productInvoiceRequest.getStatus());
+        productInvoice.setCreatedTime(new Timestamp(System.currentTimeMillis()));
         return productInvoice;
+    }
+
+    private Invoice createInvoiceObject(String invoiceId){
+        Invoice invoice = new Invoice();
+        invoice.setInvoiceId(invoiceId);
+        invoice.setCreatedTime(new Timestamp(System.currentTimeMillis()));
+        invoice.setInvoiceStatus("OPEN");
+        return invoice;
     }
 
     private List<ProductInvoiceResponse> getListOfProductsExpiringBetweenDates(Date startDate, Date endDate) {
@@ -188,7 +208,7 @@ public class ProductServiceImpl implements ProductService {
 
     private ProductInvoiceResponse convertToProductInvoiceResponse(ProductInvoice productInvoice) {
         return ProductInvoiceResponse.builder()
-                .invoiceId(productInvoice.getInvoiceId())
+                .invoiceId(productInvoice.getInvoice().getInvoiceId())
                 .invoiceDate(productInvoice.getInvoiceDate())
                 .vendorName(productInvoice.getVendorName())
                 .productName(productInvoice.getProductName())
@@ -196,6 +216,7 @@ public class ProductServiceImpl implements ProductService {
                 .productSize(productInvoice.getProductSize())
                 .productQuantity(productInvoice.getProductQuantity())
                 .expirationDate(productInvoice.getExpirationDate())
+                .invoiceStatus(productInvoice.getInvoice().getInvoiceStatus())
                 .build();
     }
 
@@ -234,5 +255,10 @@ public class ProductServiceImpl implements ProductService {
                 }
             }
         }
+    }
+
+    private void saveProductInvoice(ProductInvoiceRequest productInvoiceRequest, Invoice invoice){
+        ProductInvoice productInvoice = convertProductInvoice(productInvoiceRequest, invoice);
+        productInvoiceRepository.save(productInvoice);
     }
 }

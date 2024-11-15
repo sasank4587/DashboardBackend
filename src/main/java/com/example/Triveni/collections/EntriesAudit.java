@@ -1,5 +1,7 @@
 package com.example.Triveni.collections;
 
+import com.example.Triveni.collections.enums.Category;
+import com.example.Triveni.collections.enums.Update;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -8,18 +10,17 @@ import lombok.Setter;
 import org.hibernate.annotations.GenericGenerator;
 
 import javax.persistence.*;
-import java.io.Serializable;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.util.UUID;
 
 @Entity
-@Table(name = "information_object")
+@Table(name = "entries_audit")
 @Getter
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class ProductInvoice implements Serializable {
+public class EntriesAudit {
 
     @Id
     @GeneratedValue(generator = "UUID")
@@ -31,32 +32,20 @@ public class ProductInvoice implements Serializable {
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "product_invoice_id", nullable = false)
+    @JoinColumn(name = "entry_id", nullable = false)
     @JsonIgnore
-    private Invoice invoice;
+    private Entries entry;
 
-    @Column(name = "invoice_date")
-    private Date invoiceDate;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "update")
+    private Update update;
 
-    @Column(name = "vendor_name")
-    private String vendorName;
+    @Column(name = "created_date")
+    private Date createdDate;
 
-    @Column(name = "brand_name")
-    private String brandName;
-
-    @Column(name = "product_name")
-    private String productName;
-
-    @Column(name = "product_size")
-    private String productSize;
-
-    @Column(name = "product_quantity")
-    private Integer productQuantity;
-
-    @Column(name = "expiration_date")
-    private Date expirationDate;
+    @Column(name = "value")
+    private Integer value;
 
     @Column(name = "created_time")
     private Timestamp createdTime;
-
 }

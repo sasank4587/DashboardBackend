@@ -1,5 +1,6 @@
 package com.example.Triveni.controller;
 
+import com.example.Triveni.exception.InvoiceDoesNotExist;
 import com.example.Triveni.request.AddProductInvoiceRequest;
 import com.example.Triveni.request.ProductInvoiceRequest;
 import com.example.Triveni.response.ErrorResponse;
@@ -35,6 +36,9 @@ public class ProductController {
             @RequestParam(defaultValue = "10") int pageSize){
         try {
             return new ResponseEntity<>(productService.getFilteredProducts(invoiceId, pageNo, pageSize), HttpStatus.OK);
+        } catch (InvoiceDoesNotExist e) {
+            return new ResponseEntity<>(new ErrorResponse("This Invoice does not exist."),
+                    HttpStatus.INTERNAL_SERVER_ERROR);
         } catch (Exception e) {
             return new ResponseEntity<>(new ErrorResponse("Application has faced an issue"),
                     HttpStatus.INTERNAL_SERVER_ERROR);
@@ -55,6 +59,9 @@ public class ProductController {
     private ResponseEntity<?> getProductDetailsByInvoiceId(@PathVariable(value = "invoiceId") String invoiceId){
         try {
             return new ResponseEntity<>(productService.getProductsByInvoiceId(invoiceId), HttpStatus.OK);
+        } catch (InvoiceDoesNotExist e) {
+            return new ResponseEntity<>(new ErrorResponse("This Invoice does not exist."),
+                    HttpStatus.INTERNAL_SERVER_ERROR);
         } catch (Exception e) {
             return new ResponseEntity<>(new ErrorResponse("Application has faced an issue"),
                     HttpStatus.INTERNAL_SERVER_ERROR);
@@ -79,8 +86,26 @@ public class ProductController {
             return new ResponseEntity<>(new ErrorResponse("Application has faced an issue"),
                     HttpStatus.INTERNAL_SERVER_ERROR);
         }
-        return new ResponseEntity<>(productService.
-                getProductsByInvoiceId(productInvoiceRequest.getInvoiceId()), HttpStatus.OK);
+        try {
+            return new ResponseEntity<>(productService.
+                    getProductsByInvoiceId(productInvoiceRequest.getInvoiceId()), HttpStatus.OK);
+        } catch (InvoiceDoesNotExist e) {
+            return new ResponseEntity<>(new ErrorResponse("This Invoice does not exist."),
+                    HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @PutMapping(path = "/status/{invoiceId}")
+    private ResponseEntity<?> CloseInvoice(@PathVariable(value = "invoiceId") String invoiceId){
+        try {
+            return new ResponseEntity<>(productService.closeInvoice(invoiceId), HttpStatus.OK);
+        } catch (InvoiceDoesNotExist e) {
+            return new ResponseEntity<>(new ErrorResponse("This Invoice does not exist."),
+                    HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (Exception e) {
+            return new ResponseEntity<>(new ErrorResponse("Application has faced an issue"),
+                    HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 
     @GetMapping(path = "/dashboard")

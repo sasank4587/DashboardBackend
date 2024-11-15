@@ -18,4 +18,5 @@ public class ProductInvoiceResponse {
     private String productSize;
     private Integer productQuantity;
     private Date expirationDate;
+    private String invoiceStatus;
 }

@@ -18,5 +18,4 @@ public class ProductInvoiceRequest {
     private String productSize;
     private Integer productQuantity;
     private Date expirationDate;
-    private String status;
 }

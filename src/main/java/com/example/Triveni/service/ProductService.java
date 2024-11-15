@@ -1,6 +1,8 @@
 package com.example.Triveni.service;
 
+import com.example.Triveni.collections.Invoice;
 import com.example.Triveni.collections.ProductInvoice;
+import com.example.Triveni.exception.InvoiceDoesNotExist;
 import com.example.Triveni.request.AddProductInvoiceRequest;
 import com.example.Triveni.request.ProductInvoiceRequest;
 import com.example.Triveni.response.DashBoardResponse;
@@ -16,15 +18,18 @@ public interface ProductService {
 
     List<ProductInvoiceResponse> getAllProducts();
 
-    Page<ProductInvoice> getFilteredProducts(String invoiceId, Integer pageNumber, Integer pageSize);
+    Page<ProductInvoiceResponse> getFilteredProducts(String invoiceId, Integer pageNumber, Integer pageSize)
+            throws InvoiceDoesNotExist;
 
     List<ProductInvoiceResponse> getNearExpiryProducts();
 
-    List<ProductInvoiceResponse> getProductsByInvoiceId(String invoiceId);
+    List<ProductInvoiceResponse> getProductsByInvoiceId(String invoiceId) throws InvoiceDoesNotExist;
 
     List<InvoiceResponse> getOpenInvoiceIds();
 
     void addProductInvoices(ProductInvoiceRequest productInvoiceRequest);
 
     DashBoardResponse getExpiryDashBoard();
+
+    Invoice closeInvoice(String invoiceId) throws InvoiceDoesNotExist;
 }
